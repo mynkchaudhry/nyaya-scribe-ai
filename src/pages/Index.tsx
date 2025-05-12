@@ -1,6 +1,7 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
-import { Send, RefreshCw, Trash2, Scale, MenuIcon, XIcon, CircleX } from 'lucide-react';
+import { Send, RefreshCw, Trash2, Scale, MenuIcon, XIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -12,7 +13,10 @@ import SourcesPanel from '@/components/SourcesPanel';
 import ModelSelector from '@/components/ModelSelector';
 import ChatHistory from '@/components/ChatHistory';
 import ThinkingAnimation from '@/components/ThinkingAnimation';
+import SplashScreen from '@/components/SplashScreen';
 import { useLegalQuery } from '@/hooks/useLegalQuery';
+import { DEFAULT_MODEL, ModelType } from '@/config/api';
+import { Source, ResponseMetadata } from '@/services/legalService';
 
 // Types
 interface Message {
@@ -20,18 +24,8 @@ interface Message {
   content: string;
   timestamp: Date;
   sources?: Source[];
-  metadata?: {
-    model: string;
-    processingTime?: number;
-    tokens?: number;
-  };
+  metadata?: ResponseMetadata;
   thinking?: boolean;
-}
-
-interface Source {
-  title: string;
-  url: string;
-  snippet: string;
 }
 
 interface Conversation {
@@ -41,81 +35,38 @@ interface Conversation {
 }
 
 const LegalAssistant = () => {
+  const [showSplashScreen, setShowSplashScreen] = useState(true);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [loadingProgress, setLoadingProgress] = useState(0);
-  const [selectedModel, setSelectedModel] = useState('gpt-3.5-turbo');
+  const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_MODEL);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [showSources, setShowSources] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [conversations, setConversations] = useState<Conversation[]>([
-    {
-      id: '1',
-      title: 'Rights during arrest',
-      updatedAt: new Date()
-    },
-    {
-      id: '2',
-      title: 'Consumer complaint procedure',
-      updatedAt: new Date()
-    },
-    {
-      id: '3',
-      title: 'Grounds for divorce',
-      updatedAt: new Date()
-    }
-  ]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
-  // Example sources that would come from the API
-  const sampleSources: Source[] = [
-    {
-      title: "Supreme Court Judgment: State of Punjab v. Davinder Singh (2020)",
-      url: "https://indiankanoon.org/doc/123456789/",
-      snippet: "...the Court held that the State Government is empowered to make provisions for reservation in promotion in the services under the State in favor of Scheduled Castes and Scheduled Tribes..."
-    },
-    {
-      title: "Constitution of India, Article 15",
-      url: "https://legislative.gov.in/constitution-of-india/",
-      snippet: "Article 15 prohibits discrimination on grounds of religion, race, caste, sex or place of birth. However, it allows the state to make special provisions for women, children..."
-    },
-  ];
+  const { 
+    isLoading, 
+    progress, 
+    sources,
+    metadata,
+    streamQuery 
+  } = useLegalQuery();
 
   // Scroll to bottom of chat when new messages are added
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  // Progress bar animation during loading
-  useEffect(() => {
-    if (isLoading) {
-      const interval = setInterval(() => {
-        setLoadingProgress(prev => {
-          // Slow down as it gets closer to 90%
-          const increment = prev < 30 ? 5 : prev < 60 ? 3 : prev < 80 ? 1 : 0.5;
-          return Math.min(prev + increment, 90);
-        });
-      }, 300);
-      
-      return () => {
-        clearInterval(interval);
-        setLoadingProgress(0);
-      };
-    }
-  }, [isLoading]);
-
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const { isLoading: queryLoading, progress, sendQuery } = useLegalQuery();
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim()) return;
+    if (!input.trim() || isLoading) return;
     
     // Add user message to chat
     const userMessage: Message = {
@@ -124,6 +75,7 @@ const LegalAssistant = () => {
       timestamp: new Date(),
     };
 
+    // Add thinking message
     const thinkingMessage: Message = {
       role: 'assistant',
       content: '',
@@ -132,48 +84,66 @@ const LegalAssistant = () => {
     };
 
     setMessages(prevMessages => [...prevMessages, userMessage, thinkingMessage]);
-    setInput('');
-    setLoadingProgress(progress); // Use the progress from our hook
     
-    // Send the query to the backend
-    try {
-      const response = await sendQuery(input.trim(), selectedModel);
-      
-      // Remove the thinking message and add the real response
-      setMessages(prevMessages => {
-        const newMessages = [...prevMessages];
-        newMessages.pop(); // Remove thinking message
+    // Clear input
+    const queryText = input.trim();
+    setInput('');
+    
+    // Stream the query response
+    streamQuery(
+      queryText,
+      selectedModel,
+      conversationId || undefined,
+      // On chunk handler (update the assistant message)
+      (chunk, fullText) => {
+        setMessages(prevMessages => {
+          const newMessages = [...prevMessages];
+          const lastIndex = newMessages.length - 1;
+          
+          // Replace the thinking message with the real response
+          if (newMessages[lastIndex].thinking) {
+            newMessages[lastIndex] = {
+              role: 'assistant',
+              content: fullText,
+              timestamp: new Date(),
+            };
+          }
+          
+          return newMessages;
+        });
+      },
+      // On complete handler
+      (responseSources, responseMetadata) => {
+        // Update the assistant message with sources and metadata
+        setMessages(prevMessages => {
+          const newMessages = [...prevMessages];
+          const lastIndex = newMessages.length - 1;
+          
+          if (newMessages[lastIndex].role === 'assistant') {
+            newMessages[lastIndex] = {
+              ...newMessages[lastIndex],
+              sources: responseSources,
+              metadata: responseMetadata
+            };
+          }
+          
+          return newMessages;
+        });
         
-        const assistantMessage: Message = {
-          role: 'assistant',
-          content: response.answer,
-          timestamp: new Date(),
-          sources: response.sources,
-          metadata: response.metadata
-        };
-        
-        return [...newMessages, assistantMessage];
-      });
-      
-      // Create a conversation if it's a new one
-      if (!conversationId) {
-        const newConversationId = `${conversations.length + 1}`;
-        const newConversation = {
-          id: newConversationId,
-          title: input.slice(0, 30) + (input.length > 30 ? '...' : ''),
-          updatedAt: new Date()
-        };
-        
-        setConversations(prev => [...prev, newConversation]);
-        setConversationId(newConversationId);
+        // Create a conversation if it's a new one
+        if (!conversationId && responseMetadata?.conversation_id) {
+          const newConversationId = responseMetadata.conversation_id;
+          const newConversation = {
+            id: newConversationId,
+            title: queryText.slice(0, 30) + (queryText.length > 30 ? '...' : ''),
+            updatedAt: new Date()
+          };
+          
+          setConversations(prev => [...prev, newConversation]);
+          setConversationId(newConversationId);
+        }
       }
-      
-    } catch (error) {
-      console.error(error);
-      
-      // Remove the thinking message if there's an error
-      setMessages(prevMessages => prevMessages.slice(0, -1));
-    }
+    );
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -206,10 +176,12 @@ const LegalAssistant = () => {
 
   const handleDeleteConversation = (id: string) => {
     setConversations(prev => prev.filter(conv => conv.id !== id));
+    
     if (conversationId === id) {
       setMessages([]);
       setConversationId(null);
     }
+    
     toast.success(`Conversation deleted`);
   };
 
@@ -231,6 +203,10 @@ const LegalAssistant = () => {
     "What are the grounds for divorce in India?",
     "Explain Right to Education Act provisions"
   ];
+
+  if (showSplashScreen) {
+    return <SplashScreen onComplete={() => setShowSplashScreen(false)} />;
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
@@ -367,7 +343,7 @@ const LegalAssistant = () => {
             {/* Sources Panel (Conditional) */}
             {showSources && (
               <div className="w-80 border-l overflow-y-auto animate-slide-in-right">
-                <SourcesPanel sources={sampleSources} />
+                <SourcesPanel sources={sources} />
               </div>
             )}
           </div>
