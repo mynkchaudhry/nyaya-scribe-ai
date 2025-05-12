@@ -21,6 +21,13 @@ class ApiService {
   }
 
   /**
+   * Get the base URL for the API
+   */
+  getBaseUrl(): string {
+    return this.baseUrl;
+  }
+
+  /**
    * Handle API response and errors
    */
   private async handleResponse<T>(response: Response): Promise<T> {
@@ -97,13 +104,20 @@ class ApiService {
   /**
    * Make a DELETE request
    */
-  async delete<T>(endpoint: string): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+  async delete<T>(endpoint: string, data?: any): Promise<T> {
+    const options: RequestInit = {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
       },
-    });
+    };
+    
+    // Add body if data is provided
+    if (data) {
+      options.body = JSON.stringify(data);
+    }
+    
+    const response = await fetch(`${this.baseUrl}${endpoint}`, options);
     
     return this.handleResponse<T>(response);
   }
