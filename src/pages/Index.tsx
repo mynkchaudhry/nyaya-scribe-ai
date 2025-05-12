@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Send, RefreshCw, Trash2, Scale, MenuIcon, XIcon, CircleX } from 'lucide-react';
@@ -13,6 +12,7 @@ import SourcesPanel from '@/components/SourcesPanel';
 import ModelSelector from '@/components/ModelSelector';
 import ChatHistory from '@/components/ChatHistory';
 import ThinkingAnimation from '@/components/ThinkingAnimation';
+import { useLegalQuery } from '@/hooks/useLegalQuery';
 
 // Types
 interface Message {
@@ -75,7 +75,7 @@ const LegalAssistant = () => {
     {
       title: "Supreme Court Judgment: State of Punjab v. Davinder Singh (2020)",
       url: "https://indiankanoon.org/doc/123456789/",
-      snippet: "...the Court held that the State Government is empowered to make provisions for reservation in promotion in the services under the State in favor of the Scheduled Castes and Scheduled Tribes..."
+      snippet: "...the Court held that the State Government is empowered to make provisions for reservation in promotion in the services under the State in favor of Scheduled Castes and Scheduled Tribes..."
     },
     {
       title: "Constitution of India, Article 15",
@@ -111,6 +111,8 @@ const LegalAssistant = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const { isLoading: queryLoading, progress, sendQuery } = useLegalQuery();
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
@@ -131,12 +133,11 @@ const LegalAssistant = () => {
 
     setMessages(prevMessages => [...prevMessages, userMessage, thinkingMessage]);
     setInput('');
-    setIsLoading(true);
-
-    // In a real implementation, this would be an API call to your backend
+    setLoadingProgress(progress); // Use the progress from our hook
+    
+    // Send the query to the backend
     try {
-      // Mock API response time
-      await new Promise(resolve => setTimeout(resolve, 4000));
+      const response = await sendQuery(input.trim(), selectedModel);
       
       // Remove the thinking message and add the real response
       setMessages(prevMessages => {
@@ -145,14 +146,10 @@ const LegalAssistant = () => {
         
         const assistantMessage: Message = {
           role: 'assistant',
-          content: "Based on the Supreme Court's judgment in State of Punjab v. Davinder Singh (2020), the State Government is empowered to make provisions for reservation in promotion in the services under the State in favor of Scheduled Castes and Scheduled Tribes.\n\nArticle 15 of the Constitution prohibits discrimination on grounds of religion, race, caste, sex, or place of birth. However, it allows the state to make special provisions for women, children, and socially and educationally backward classes of citizens, including Scheduled Castes and Scheduled Tribes.\n\nIn the case of M. Nagaraj v. Union of India (2006), the Supreme Court upheld the constitutional validity of reservation in promotion, subject to the State proving backwardness, inadequacy of representation, and maintenance of efficiency.\n\nBased on these precedents, a government policy implementing reservation in promotions would be constitutional if it satisfies these three criteria established by the Supreme Court.\n\nIs there any specific aspect of reservation policy you would like me to elaborate on?",
+          content: response.answer,
           timestamp: new Date(),
-          sources: sampleSources,
-          metadata: {
-            model: selectedModel,
-            processingTime: 1.24,
-            tokens: 312
-          }
+          sources: response.sources,
+          metadata: response.metadata
         };
         
         return [...newMessages, assistantMessage];
@@ -171,17 +168,11 @@ const LegalAssistant = () => {
         setConversationId(newConversationId);
       }
       
-      // Complete loading animation
-      setLoadingProgress(100);
-      setTimeout(() => setIsLoading(false), 500);
-      
     } catch (error) {
-      toast.error("Failed to get response. Please try again.");
       console.error(error);
       
       // Remove the thinking message if there's an error
       setMessages(prevMessages => prevMessages.slice(0, -1));
-      setIsLoading(false);
     }
   };
 
@@ -247,7 +238,7 @@ const LegalAssistant = () => {
       
       {isLoading && (
         <div className="absolute top-16 left-0 right-0 z-10">
-          <Progress value={loadingProgress} className="h-1 rounded-none" />
+          <Progress value={progress} className="h-1 rounded-none" />
         </div>
       )}
       
