@@ -34,7 +34,7 @@ const ChatToolbar: React.FC<ChatToolbarProps> = ({
         variant="ghost" 
         size="icon"
         className="hidden md:flex"
-        onClick={() => setSidebarOpen(prev => !prev)}
+        onClick={() => setSidebarOpen(!sidebarOpen)}
       >
         {sidebarOpen ? <XIcon className="h-4 w-4" /> : <MenuIcon className="h-4 w-4" />}
       </Button>

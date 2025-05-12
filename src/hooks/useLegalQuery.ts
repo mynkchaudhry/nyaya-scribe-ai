@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
 import { legalService, LegalQueryRequest, StreamChunk, Source, ResponseMetadata } from '../services/legalService';
 
@@ -9,7 +9,10 @@ interface UseLegalQueryResult {
   sources: Source[];
   metadata: ResponseMetadata | null;
   sendQuery: (query: string, model: string, conversationId?: string) => Promise<string>;
-  streamQuery: (query: string, model: string, conversationId?: string, 
+  streamQuery: (
+    query: string, 
+    model: string, 
+    conversationId?: string, 
     onChunk?: (chunk: string, full: string) => void,
     onComplete?: (sources: Source[], metadata: ResponseMetadata) => void
   ) => () => void;
@@ -34,54 +37,128 @@ export function useLegalQuery(): UseLegalQueryResult {
     };
   }, []);
 
-  // Regular query function (non-streaming)
-  const sendQuery = async (query: string, model: string, conversationId?: string): Promise<string> => {
-    setIsLoading(true);
+  // Update progress during loading states
+  const startProgressAnimation = useCallback(() => {
     setProgress(10);
     
+    const interval = setInterval(() => {
+      setProgress(prev => {
+        const increment = prev < 30 ? 5 : prev < 60 ? 3 : prev < 80 ? 1 : 0.5;
+        return Math.min(prev + increment, 90);
+      });
+    }, 300);
+    
+    return interval;
+  }, []);
+
+  // Complete the progress animation
+  const completeProgressAnimation = useCallback(() => {
+    setProgress(100);
+    
+    // Allow the progress bar to complete animation
+    setTimeout(() => {
+      setIsLoading(false);
+      setProgress(0);
+    }, 500);
+  }, []);
+
+  // Create request object
+  const createQueryRequest = useCallback((query: string, model: string, conversationId?: string, streaming: boolean = false): LegalQueryRequest => {
+    return {
+      query,
+      model_name: model as any,
+      conversation_id: conversationId,
+      stream: streaming
+    };
+  }, []);
+
+  // Handle error cases
+  const handleQueryError = useCallback((error: any) => {
+    setIsLoading(false);
+    setProgress(0);
+    toast.error(error.message || 'Failed to get a response. Please try again.');
+  }, []);
+
+  // Regular query function (non-streaming)
+  const sendQuery = useCallback(async (query: string, model: string, conversationId?: string): Promise<string> => {
+    setIsLoading(true);
+    const progressInterval = startProgressAnimation();
+    
     try {
-      // Start progress animation
-      const interval = setInterval(() => {
-        setProgress(prev => {
-          const increment = prev < 30 ? 5 : prev < 60 ? 3 : prev < 80 ? 1 : 0.5;
-          return Math.min(prev + increment, 90);
-        });
-      }, 300);
-      
       // Make the actual API call
-      const request: LegalQueryRequest = {
-        query,
-        model_name: model as any,
-        conversation_id: conversationId,
-        stream: false
-      };
-      
+      const request = createQueryRequest(query, model, conversationId, false);
       const response = await legalService.sendQuery(request);
       
-      clearInterval(interval);
-      setProgress(100);
+      clearInterval(progressInterval);
+      completeProgressAnimation();
       
       // Set sources and metadata
       setSources(response.context_sources || []);
       setMetadata(response.metadata);
       
-      // Allow the progress bar to complete animation
-      setTimeout(() => {
-        setIsLoading(false);
-        setProgress(0);
-      }, 500);
-      
       return response.response;
     } catch (error: any) {
-      setIsLoading(false);
-      setProgress(0);
-      toast.error(error.message || 'Failed to get a response. Please try again.');
+      clearInterval(progressInterval);
+      handleQueryError(error);
       throw error;
     }
-  };
+  }, [startProgressAnimation, completeProgressAnimation, createQueryRequest, handleQueryError]);
+  
+  // Handle streaming message events
+  const handleStreamEvent = useCallback((
+    event: MessageEvent, 
+    eventSource: EventSource, 
+    progressInterval: number,
+    onChunk?: (chunk: string, full: string) => void,
+    onComplete?: (sources: Source[], metadata: ResponseMetadata) => void
+  ) => {
+    try {
+      const data: StreamChunk = JSON.parse(event.data);
+      
+      // Check for error
+      if (data.error) {
+        toast.error(data.error);
+        clearInterval(progressInterval);
+        setIsLoading(false);
+        setProgress(0);
+        eventSource.close();
+        return;
+      }
+      
+      // If this is the completion message
+      if (data.done) {
+        clearInterval(progressInterval);
+        completeProgressAnimation();
+        
+        // Set sources and metadata
+        if (data.metadata) {
+          setMetadata(data.metadata);
+        }
+        
+        if (data.context_sources) {
+          setSources(data.context_sources);
+          
+          // Call completion callback
+          if (onComplete && data.metadata) {
+            onComplete(data.context_sources, data.metadata);
+          }
+        }
+        
+        eventSource.close();
+        return;
+      }
+      
+      // Handle normal chunk
+      if (data.chunk && data.full && onChunk) {
+        onChunk(data.chunk, data.full);
+      }
+    } catch (error) {
+      console.error('Error parsing SSE message:', error);
+    }
+  }, [completeProgressAnimation]);
   
   // Streaming query function
-  const streamQuery = (
+  const streamQuery = useCallback((
     query: string, 
     model: string, 
     conversationId?: string,
@@ -89,23 +166,10 @@ export function useLegalQuery(): UseLegalQueryResult {
     onComplete?: (sources: Source[], metadata: ResponseMetadata) => void
   ) => {
     setIsLoading(true);
-    setProgress(10);
+    const progressInterval = startProgressAnimation();
     
     // Create request
-    const request: LegalQueryRequest = {
-      query,
-      model_name: model as any, 
-      conversation_id: conversationId,
-      stream: true
-    };
-    
-    // Start progress animation
-    const progressInterval = setInterval(() => {
-      setProgress(prev => {
-        const increment = prev < 30 ? 5 : prev < 60 ? 3 : prev < 80 ? 1 : 0.5;
-        return Math.min(prev + increment, 90);
-      });
-    }, 300);
+    const request = createQueryRequest(query, model, conversationId, true);
     
     // Clean up previous event source
     if (eventSourceRef.current) {
@@ -119,55 +183,7 @@ export function useLegalQuery(): UseLegalQueryResult {
       
       // Handle messages
       eventSource.onmessage = (event) => {
-        try {
-          const data: StreamChunk = JSON.parse(event.data);
-          
-          // Check for error
-          if (data.error) {
-            toast.error(data.error);
-            clearInterval(progressInterval);
-            setIsLoading(false);
-            setProgress(0);
-            eventSource.close();
-            return;
-          }
-          
-          // If this is the completion message
-          if (data.done) {
-            clearInterval(progressInterval);
-            setProgress(100);
-            
-            // Set sources and metadata
-            if (data.metadata) {
-              setMetadata(data.metadata);
-            }
-            
-            if (data.context_sources) {
-              setSources(data.context_sources);
-              
-              // Call completion callback
-              if (onComplete && data.metadata) {
-                onComplete(data.context_sources, data.metadata);
-              }
-            }
-            
-            // Allow the progress bar to complete animation
-            setTimeout(() => {
-              setIsLoading(false);
-              setProgress(0);
-            }, 500);
-            
-            eventSource.close();
-            return;
-          }
-          
-          // Handle normal chunk
-          if (data.chunk && data.full && onChunk) {
-            onChunk(data.chunk, data.full);
-          }
-        } catch (error) {
-          console.error('Error parsing SSE message:', error);
-        }
+        handleStreamEvent(event, eventSource, progressInterval, onChunk, onComplete);
       };
       
       // Handle connection errors
@@ -196,7 +212,7 @@ export function useLegalQuery(): UseLegalQueryResult {
       setIsLoading(false);
       setProgress(0);
     };
-  };
+  }, [startProgressAnimation, createQueryRequest, handleStreamEvent]);
   
   return {
     isLoading,
