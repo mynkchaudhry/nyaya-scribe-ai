@@ -82,6 +82,7 @@ export const legalService = {
    * Send a legal query to the backend
    */
   async sendQuery(request: LegalQueryRequest): Promise<LegalQueryResponse> {
+    // For non-streaming requests use POST
     return apiService.post<LegalQueryResponse>('/query', request);
   },
   
@@ -129,8 +130,12 @@ export const legalService = {
       }
     });
     
+    // Force stream parameter to be true
+    params.set('stream', 'true');
+    
     // Create an event source for the query endpoint
     const url = `${apiService.getBaseUrl()}/query?${params.toString()}`;
     return new EventSource(url);
   }
 };
+
