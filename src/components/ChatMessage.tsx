@@ -5,25 +5,7 @@ import { Scale, Clock, Cpu } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import ThinkingAnimation from './ThinkingAnimation';
-
-interface Source {
-  title: string;
-  url: string;
-  snippet: string;
-}
-
-interface Message {
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: Date;
-  sources?: Source[];
-  metadata?: {
-    model: string;
-    processingTime?: number;
-    tokens?: number;
-  };
-  thinking?: boolean;
-}
+import { Message } from '@/types/chat';
 
 interface ChatMessageProps {
   message: Message;
@@ -91,16 +73,16 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
             
             {!isUser && message.metadata && !message.thinking && (
               <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
-                {message.metadata.processingTime !== undefined && (
+                {message.metadata.processing_time !== undefined && (
                   <div className="flex items-center gap-1">
                     <Clock className="h-3 w-3" />
-                    <span>{message.metadata.processingTime}s</span>
+                    <span>{message.metadata.processing_time}s</span>
                   </div>
                 )}
-                {message.metadata.tokens !== undefined && (
+                {message.metadata.tokens_used !== undefined && (
                   <div className="flex items-center gap-1">
                     <Cpu className="h-3 w-3" />
-                    <span>{message.metadata.tokens} tokens</span>
+                    <span>{message.metadata.tokens_used} tokens</span>
                   </div>
                 )}
               </div>
