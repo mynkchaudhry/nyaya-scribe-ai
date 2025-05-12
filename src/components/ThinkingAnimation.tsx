@@ -30,14 +30,14 @@ const ThinkingAnimation: React.FC<ThinkingAnimationProps> = ({ className }) => {
   }, []);
 
   return (
-    <div className={cn("flex flex-col space-y-2 w-full max-w-md", className)}>
-      <div className="inline-block mb-2">
-        <div className="flex space-x-1">
+    <div className={cn("flex flex-col space-y-3 w-full max-w-md p-4", className)}>
+      <div className="inline-block mb-3">
+        <div className="flex space-x-1.5">
           {[0, 1, 2].map((dot) => (
             <div
               key={dot}
               className={cn(
-                "h-2 w-2 rounded-full bg-primary animate-pulse",
+                "h-2.5 w-2.5 rounded-full bg-primary animate-pulse",
                 dot === 0 && "animation-delay-0",
                 dot === 1 && "animation-delay-150",
                 dot === 2 && "animation-delay-300"
@@ -47,20 +47,20 @@ const ThinkingAnimation: React.FC<ThinkingAnimationProps> = ({ className }) => {
         </div>
       </div>
 
-      <div className="flex flex-col space-y-2">
+      <div className="flex flex-col space-y-3">
         {thoughts.map((thought, index) => (
           <div 
             key={index} 
-            className="text-sm text-muted-foreground animate-fade-in flex items-center"
+            className="text-sm text-muted-foreground animate-fade-in flex items-center bg-accent/30 p-2 pl-3 pr-4 rounded-xl"
             style={{ animationDelay: `${index * 200}ms` }}
           >
-            <div className="w-1 h-1 rounded-full bg-primary mr-2"></div>
+            <div className="w-1.5 h-1.5 rounded-full bg-primary mr-2.5"></div>
             {thought}
           </div>
         ))}
         
         {thoughts.length < thoughtSteps.length && (
-          <Skeleton className="h-4 w-32 mt-1 opacity-40" />
+          <Skeleton className="h-5 w-40 mt-1 opacity-40" />
         )}
       </div>
     </div>
