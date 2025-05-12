@@ -51,7 +51,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
         <div className="flex items-start gap-4">
           <div 
             className={cn(
-              "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
+              "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm",
               isUser ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"
             )}
           >
@@ -63,7 +63,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
           </div>
           
           <div className="flex-1">
-            <div className="flex flex-wrap items-center gap-2 mb-1">
+            <div className="flex flex-wrap items-center gap-2 mb-2">
               <span className="font-medium text-sm">
                 {isUser ? 'You' : 'NyayaGPT'}
               </span>
@@ -72,13 +72,16 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
               </span>
               
               {!isUser && message.metadata && (
-                <Badge variant="outline" className="text-xs font-normal">
+                <Badge variant="outline" className="text-xs font-normal rounded-full px-2">
                   {message.metadata.model}
                 </Badge>
               )}
             </div>
             
-            <div className="text-foreground leading-relaxed">
+            <div className={cn(
+              "text-foreground leading-relaxed rounded-xl",
+              isUser ? "bg-primary/5 p-3" : "bg-transparent"
+            )}>
               {message.thinking ? (
                 <ThinkingAnimation />
               ) : (
@@ -87,7 +90,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
             </div>
             
             {!isUser && message.metadata && !message.thinking && (
-              <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+              <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
                 {message.metadata.processingTime !== undefined && (
                   <div className="flex items-center gap-1">
                     <Clock className="h-3 w-3" />

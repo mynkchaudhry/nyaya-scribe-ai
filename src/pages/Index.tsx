@@ -1,11 +1,12 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
-import { Send, RefreshCw, Trash2, Scale, MenuIcon, XIcon } from 'lucide-react';
+import { Send, RefreshCw, Trash2, Scale, MenuIcon, XIcon, CircleX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
+import { Progress } from '@/components/ui/progress';
 import Header from '@/components/Header';
 import ChatMessage from '@/components/ChatMessage';
 import SourcesPanel from '@/components/SourcesPanel';
@@ -43,6 +44,7 @@ const LegalAssistant = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState(0);
   const [selectedModel, setSelectedModel] = useState('gpt-3.5-turbo');
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [showSources, setShowSources] = useState(false);
@@ -87,6 +89,24 @@ const LegalAssistant = () => {
     scrollToBottom();
   }, [messages]);
 
+  // Progress bar animation during loading
+  useEffect(() => {
+    if (isLoading) {
+      const interval = setInterval(() => {
+        setLoadingProgress(prev => {
+          // Slow down as it gets closer to 90%
+          const increment = prev < 30 ? 5 : prev < 60 ? 3 : prev < 80 ? 1 : 0.5;
+          return Math.min(prev + increment, 90);
+        });
+      }, 300);
+      
+      return () => {
+        clearInterval(interval);
+        setLoadingProgress(0);
+      };
+    }
+  }, [isLoading]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -116,7 +136,7 @@ const LegalAssistant = () => {
     // In a real implementation, this would be an API call to your backend
     try {
       // Mock API response time
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 4000));
       
       // Remove the thinking message and add the real response
       setMessages(prevMessages => {
@@ -151,13 +171,16 @@ const LegalAssistant = () => {
         setConversationId(newConversationId);
       }
       
+      // Complete loading animation
+      setLoadingProgress(100);
+      setTimeout(() => setIsLoading(false), 500);
+      
     } catch (error) {
       toast.error("Failed to get response. Please try again.");
       console.error(error);
       
       // Remove the thinking message if there's an error
       setMessages(prevMessages => prevMessages.slice(0, -1));
-    } finally {
       setIsLoading(false);
     }
   };
@@ -222,9 +245,15 @@ const LegalAssistant = () => {
     <div className="min-h-screen flex flex-col bg-background">
       <Header />
       
+      {isLoading && (
+        <div className="absolute top-16 left-0 right-0 z-10">
+          <Progress value={loadingProgress} className="h-1 rounded-none" />
+        </div>
+      )}
+      
       <div className="flex flex-1 overflow-hidden">
         {/* Chat History Sidebar - Hidden on mobile */}
-        <div className={`hidden md:block transition-all duration-300 ${sidebarOpen ? 'w-64' : 'w-0'}`}>
+        <div className={`hidden md:block transition-all duration-300 ${sidebarOpen ? 'w-72' : 'w-0'}`}>
           {sidebarOpen && (
             <ChatHistory 
               conversations={conversations}
@@ -244,7 +273,7 @@ const LegalAssistant = () => {
               <MenuIcon className="h-5 w-5" />
             </Button>
           </SheetTrigger>
-          <SheetContent side="left" className="w-64 p-0">
+          <SheetContent side="left" className="w-72 p-0 rounded-r-2xl">
             <ChatHistory 
               conversations={conversations}
               activeConversationId={conversationId}
@@ -259,7 +288,7 @@ const LegalAssistant = () => {
         {/* Main Chat Area */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Toolbar */}
-          <div className="flex items-center justify-between p-2 border-b">
+          <div className="flex items-center justify-between p-2 border-b backdrop-blur-sm bg-background/90 sticky top-0 z-10">
             {/* Toggle Sidebar Button (Desktop) */}
             <Button 
               variant="ghost" 
@@ -274,7 +303,7 @@ const LegalAssistant = () => {
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-xs"
+                className="text-xs rounded-full"
                 onClick={() => setShowSources(!showSources)}
               >
                 {showSources ? "Hide Sources" : "Show Sources"}
@@ -291,6 +320,7 @@ const LegalAssistant = () => {
                 onClick={clearChat}
                 disabled={messages.length === 0}
                 title="Clear conversation"
+                className="rounded-full"
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
@@ -300,6 +330,7 @@ const LegalAssistant = () => {
                 size="icon"
                 onClick={handleNewConversation}
                 title="New conversation"
+                className="rounded-full"
               >
                 <RefreshCw className="h-4 w-4" />
               </Button>
@@ -315,16 +346,16 @@ const LegalAssistant = () => {
                   <div className="mb-6">
                     <Scale className="h-12 w-12 mx-auto text-primary opacity-80" />
                   </div>
-                  <h3 className="text-2xl font-serif font-semibold text-foreground mb-3">Welcome to NyayaGPT</h3>
-                  <p className="text-muted-foreground max-w-lg mb-6">
+                  <h3 className="text-3xl font-serif font-semibold text-foreground mb-3 animate-fade-in">Welcome to NyayaGPT</h3>
+                  <p className="text-muted-foreground max-w-lg mb-8 animate-fade-in">
                     Your AI legal assistant trained on Indian law, including Supreme Court and High Court judgments, statutes, and legal procedures.
                   </p>
-                  <div className="grid grid-cols-1 gap-3 w-full max-w-md">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl animate-fade-in">
                     {exampleQuestions.map((example, index) => (
                       <Button 
                         key={index}
                         variant="outline" 
-                        className="flex justify-start py-3 px-4 h-auto text-left"
+                        className="flex justify-start py-3 px-4 h-auto text-left rounded-xl hover:bg-accent transition-all duration-200 hover:scale-[1.02]"
                         onClick={() => setInput(example)}
                       >
                         <span className="truncate">{example}</span>
@@ -333,7 +364,7 @@ const LegalAssistant = () => {
                   </div>
                 </div>
               ) : (
-                <div>
+                <div className="pb-20">
                   {messages.map((message, index) => (
                     <ChatMessage key={index} message={message} />
                   ))}
@@ -344,23 +375,23 @@ const LegalAssistant = () => {
             
             {/* Sources Panel (Conditional) */}
             {showSources && (
-              <div className="w-80 border-l overflow-y-auto">
+              <div className="w-80 border-l overflow-y-auto animate-slide-in-right">
                 <SourcesPanel sources={sampleSources} />
               </div>
             )}
           </div>
           
           {/* Input Area */}
-          <div className="border-t p-4">
+          <div className="border-t p-4 backdrop-blur-sm bg-background/90 sticky bottom-0 z-10">
             <form onSubmit={handleSubmit}>
-              <div className="relative rounded-lg border bg-background">
+              <div className="relative rounded-xl border bg-background shadow-sm">
                 <Textarea
                   ref={textareaRef}
                   value={input}
                   onChange={handleInputChange}
                   onKeyDown={handleKeyDown}
                   placeholder="Ask a legal question..."
-                  className="resize-none pr-12 max-h-32 overflow-y-auto min-h-[56px] border-none focus-visible:ring-0"
+                  className="resize-none pr-12 max-h-32 overflow-y-auto min-h-[56px] border-none focus-visible:ring-0 rounded-xl"
                   disabled={isLoading}
                   rows={1}
                 />
@@ -368,7 +399,7 @@ const LegalAssistant = () => {
                   <Button
                     type="submit"
                     size="icon"
-                    className="rounded-full h-8 w-8"
+                    className="rounded-full h-9 w-9 shadow-md bg-primary hover:bg-primary/90 hover:scale-105 transition-all duration-200"
                     disabled={!input.trim() || isLoading}
                   >
                     <Send className="h-4 w-4" />

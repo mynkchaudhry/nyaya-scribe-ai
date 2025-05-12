@@ -1,15 +1,37 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface ThinkingAnimationProps {
   className?: string;
 }
 
 const ThinkingAnimation: React.FC<ThinkingAnimationProps> = ({ className }) => {
+  const [thoughts, setThoughts] = useState<string[]>([]);
+  const thoughtSteps = [
+    "Analyzing query...",
+    "Retrieving relevant cases...",
+    "Processing legal precedents...",
+    "Formulating legal opinion..."
+  ];
+
+  useEffect(() => {
+    const showThoughts = async () => {
+      for (let i = 0; i < thoughtSteps.length; i++) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        setThoughts(prev => [...prev, thoughtSteps[i]]);
+      }
+    };
+    
+    showThoughts();
+    
+    return () => setThoughts([]);
+  }, []);
+
   return (
-    <div className={cn("flex gap-1 items-center", className)}>
-      <div className="inline-block">
+    <div className={cn("flex flex-col space-y-2 w-full max-w-md", className)}>
+      <div className="inline-block mb-2">
         <div className="flex space-x-1">
           {[0, 1, 2].map((dot) => (
             <div
@@ -23,6 +45,23 @@ const ThinkingAnimation: React.FC<ThinkingAnimationProps> = ({ className }) => {
             />
           ))}
         </div>
+      </div>
+
+      <div className="flex flex-col space-y-2">
+        {thoughts.map((thought, index) => (
+          <div 
+            key={index} 
+            className="text-sm text-muted-foreground animate-fade-in flex items-center"
+            style={{ animationDelay: `${index * 200}ms` }}
+          >
+            <div className="w-1 h-1 rounded-full bg-primary mr-2"></div>
+            {thought}
+          </div>
+        ))}
+        
+        {thoughts.length < thoughtSteps.length && (
+          <Skeleton className="h-4 w-32 mt-1 opacity-40" />
+        )}
       </div>
     </div>
   );

@@ -33,7 +33,7 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
         <Button 
           onClick={onNewConversation} 
           variant="outline" 
-          className="w-full justify-start gap-2"
+          className="w-full justify-start gap-2 rounded-xl hover:bg-accent transition-all duration-200 hover:scale-[1.02]"
         >
           <PlusCircle className="h-4 w-4" />
           <span>New Conversation</span>
@@ -49,10 +49,10 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
               <div 
                 key={conv.id}
                 className={cn(
-                  "group flex items-center justify-between px-3 py-2 rounded-md cursor-pointer transition-colors",
+                  "group flex items-center justify-between px-3 py-2 rounded-xl cursor-pointer transition-all duration-200",
                   activeConversationId === conv.id 
                     ? "bg-accent text-accent-foreground" 
-                    : "hover:bg-accent/50"
+                    : "hover:bg-accent/50 hover:scale-[1.01]"
                 )}
                 onClick={() => onSelectConversation(conv.id)}
               >
@@ -63,7 +63,7 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-6 w-6 opacity-0 group-hover:opacity-100"
+                  className="h-6 w-6 opacity-0 group-hover:opacity-100 rounded-full"
                   onClick={(e) => {
                     e.stopPropagation();
                     onDeleteConversation(conv.id);
